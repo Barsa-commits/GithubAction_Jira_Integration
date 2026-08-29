@@ -10,7 +10,7 @@ on:
     branches:
       - main
 
-  pull:
+  pull_request:
     branches:
       - main
       
@@ -153,7 +153,8 @@ jobs:
 
       # Step: Run ESLint if configured
       - name: Lint with ESLint
-        run: npx eslint "client/src/**/*.ts" "server/**/*.js" || echo "Note: ESLint not configured, skipping"
+        run: |
+        npx eslint "client/src/**/*.ts" "server/**/*.js" || echo "Note: ESLint not configured, skipping"
         # This checks code quality and best practices
         continue-on-error: true
 
