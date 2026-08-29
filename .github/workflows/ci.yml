@@ -145,7 +145,8 @@ jobs:
 
       # Step: Check code formatting (if prettier is configured)
       - name: Check code formatting with prettier
-        run: npx prettier --check "client/src/**/*.{ts,js,css,html}" "server/**/*.js" || echo "Note: Prettier not configured, skipping"
+        run: |
+         npx prettier --check "client/src/**/*.{ts,js,css,html}" "server/**/*.js" || echo "Note: Prettier not configured, skipping"
         # This step will warn if files don't match prettier formatting
         # Remove '|| echo' part if you want to enforce stricter formatting
         continue-on-error: true
