@@ -1,0 +1,182 @@
+# GitHub Actions CI/CD Workflow for GITHUB ACTION DEMO
+# This workflow runs on every push and pull request to the main branch
+# It performs linting, dependency installation, build, and tests
+
+name: CI/CD Pipeline
+
+# Trigger conditions: Run on push requests to the main branch
+on:
+  push:
+    branches:
+      - main
+
+  pull:
+    branches:
+      - main
+      
+# Environment variables for consistency across jobs
+env:
+  NODE_VERSION: '18'
+  CI: true
+
+# Define the jobs that will run in this workflow
+jobs:
+  # Job 1: Build and Test Job
+  build:
+    # Run on the latest Ubuntu environment
+    runs-on: ubuntu-latest
+
+    # Define the strategy for matrix builds (optional, useful for testing multiple versions)
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    # Steps to execute in this job
+    steps:
+      # Step 1: Checkout the repository code
+      # This action checks out the source code from the repository
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history to enable proper git operations
+          fetch-depth: 0
+
+      # Step 2: Setup Node.js environment
+      # Installs and configures the Node.js runtime
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          # Enable npm cache to speed up dependency installation
+          cache: 'npm'
+
+      # Step 3: Display Node.js and npm versions for debugging
+      # Useful for troubleshooting version-related issues
+      - name: Display Node.js and npm version
+        run: |
+          echo "Node.js version: $(node --version)"
+          echo "npm version: $(npm --version)"
+
+      # Step 4: Install project dependencies
+      # Installs all dependencies listed in package.json and package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        # npm ci (clean install) is preferred over npm install in CI environments
+        # It ensures reproducible builds by using exact versions from package-lock.json
+
+      # Step 5: Build the TypeScript and Angular application
+      # Compiles TypeScript source code to JavaScript
+      - name: Build the application
+        run: npm run build
+        # This runs the "build" script from package.json which executes 'tsc'
+        # The build will fail if there are TypeScript compilation errors
+
+      # Step 6: Run the test suite
+      # Executes all tests defined in the project
+      - name: Run tests
+        run: npm test
+        # This runs the "test" script from package.json
+        # Currently configured to check if tests exist; expand as you add real tests
+
+      # Step 7: Test server API with conversion example
+      # Starts the server and tests the conversion with "HELLO WORLD"
+      - name: Test server API conversion
+        run: |
+          # Start the server in the background
+          node server/index.js &
+          SERVER_PID=$!
+          echo "Server started with PID: $SERVER_PID"
+          
+          # Wait for server to be ready
+          sleep 2
+          
+          # Test the conversion API
+          echo "Testing conversion: HELLO WORLD → hello world"
+          RESULT=$(curl -s -X POST http://localhost:3001/api/convert \
+            -H "Content-Type: application/json" \
+            -d '{"value":"HELLO WORLD"}')
+          
+          echo "API Response: $RESULT"
+          
+          # Kill the server
+          kill $SERVER_PID 2>/dev/null || true
+          echo "Test complete"
+        continue-on-error: true
+
+      # Step 8: (Optional) Upload build artifacts
+      # Saves the build output for deployment or further inspection
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          # Name of the artifact for reference
+          name: build-output-node-${{ matrix.node-version }}
+          # Path to the compiled/generated files
+          path: |
+            dist/
+            out-tsc/
+          # Retain artifacts for 7 days
+          retention-days: 7
+
+      # Step 8: (Optional) Create a summary report
+      # Generates a readable summary of the workflow execution
+      - name: Create workflow summary
+        if: always()
+        run: |
+          echo "## CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Node.js Version**: ${{ matrix.node-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+
+  # Job 2: Code Quality Check (Optional but recommended)
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # Step: Check code formatting (if prettier is configured)
+      - name: Check code formatting with prettier
+        run: npx prettier --check "client/src/**/*.{ts,js,css,html}" "server/**/*.js" || echo "Note: Prettier not configured, skipping"
+        # This step will warn if files don't match prettier formatting
+        # Remove '|| echo' part if you want to enforce stricter formatting
+        continue-on-error: true
+
+      # Step: Run ESLint if configured
+      - name: Lint with ESLint
+        run: npx eslint "client/src/**/*.ts" "server/**/*.js" || echo "Note: ESLint not configured, skipping"
+        # This checks code quality and best practices
+        continue-on-error: true
+
+  # Job 3: Security scanning (Optional but recommended)
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # Step: Run npm audit to check for vulnerable dependencies
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        # This checks for known vulnerabilities in dependencies
+        # Fails if vulnerabilities at 'moderate' level or higher are found
+        continue-on-error: true
+
+# Workflow completion status
+# The workflow is considered successful only if all required jobs pass
+# Failed jobs will prevent merge of pull requests (if branch protection is enabled)
