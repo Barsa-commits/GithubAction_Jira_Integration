@@ -13,6 +13,15 @@ on:
   pull_request:
     branches:
       - main
+
+  # Allow manual runs with a custom input value
+  workflow_dispatch:
+    inputs:
+      text:
+        description: 'Enter uppercase text to convert to lowercase'
+        required: false
+        type: string
+        default: 'HELLO WORLD'
       
 # Environment variables for consistency across jobs
 env:
@@ -81,26 +90,35 @@ jobs:
       # Step 7: Test server API with conversion example
       # Starts the server and tests the conversion with "HELLO WORLD"
       - name: Test server API conversion
-        run: |
-          # Start the server in the background
-          node server/index.js &
-          SERVER_PID=$!
-          echo "Server started with PID: $SERVER_PID"
-          
-          # Wait for server to be ready
-          sleep 2
-          
-          # Test the conversion API
-          echo "Testing conversion: HELLO WORLD → hello world"
-          RESULT=$(curl -s -X POST http://localhost:3001/api/convert \
-            -H "Content-Type: application/json" \
-            -d '{"value":"HELLO WORLD"}')
-          
-          echo "API Response: $RESULT"
-          
-          # Kill the server
-          kill $SERVER_PID 2>/dev/null || true
-          echo "Test complete"
+          env:
+            INPUT_TEXT: ${{ github.event.inputs.text || 'HELLO WORLD' }}
+          run: |
+            # Start the server in the background
+            node server/index.js &
+            SERVER_PID=$!
+            echo "Server started with PID: $SERVER_PID"
+
+            # Wait for server to be ready
+            sleep 2
+
+            EXPECTED_LOWER=$(printf '%s' "$INPUT_TEXT" | tr '[:upper:]' '[:lower:]')
+            echo "Testing conversion: $INPUT_TEXT → $EXPECTED_LOWER"
+
+            RESULT=$(curl -s -X POST http://localhost:3001/api/convert \
+              -H "Content-Type: application/json" \
+              -d "{\"value\":\"$INPUT_TEXT\"}")
+
+            echo "API Response: $RESULT"
+
+            echo "$RESULT" | grep -q "\"result\":\"$EXPECTED_LOWER\""
+            if [ $? -ne 0 ]; then
+              echo "Conversion failed: expected lowercase result '$EXPECTED_LOWER' but got '$RESULT'"
+              kill $SERVER_PID 2>/dev/null || true
+              exit 1
+            fi
+
+            kill $SERVER_PID 2>/dev/null || true
+            echo "Test complete"
         continue-on-error: true
 
       # Step 8: (Optional) Upload build artifacts
