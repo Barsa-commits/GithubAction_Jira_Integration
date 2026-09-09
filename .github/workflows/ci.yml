@@ -197,6 +197,59 @@ jobs:
         # Fails if vulnerabilities at 'moderate' level or higher are found
         continue-on-error: true
 
+  deploy:
+    needs: 
+      - build
+      - lint
+      - security
+
+    runs-on: ubuntu-latest
+
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Copy Angular build to Azure VM
+        run: |
+          scp -o StrictHostKeyChecking=no \
+          -r ./dist/client/browser/* \
+          ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/
+
+      - name: Deploy to NGINX
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+          ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "
+            sudo cp /home/${{ secrets.VM_USER }}/index.html /var/www/html/
+            sudo cp /home/${{ secrets.VM_USER }}/main.js /var/www/html/
+            sudo cp /home/${{ secrets.VM_USER }}/polyfills.js /var/www/html/
+            sudo cp /home/${{ secrets.VM_USER }}/styles.css /var/www/html/
+            sudo systemctl restart nginx
+          " 
+      - name: Verify deployment
+        run: |
+          curl -I http://${{ secrets.VM_HOST }}       
+
 # Workflow completion status
 # The workflow is considered successful only if all required jobs pass
 # Failed jobs will prevent merge of pull requests (if branch protection is enabled)
