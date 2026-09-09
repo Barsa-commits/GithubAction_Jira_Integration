@@ -4,7 +4,7 @@
   "description": "GITHUB ACTION DEMO: sample lowercase word converter using Angular and Node.js.",
   "main": "server/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "ng build",
     "server": "node server/index.js",
     "client": "ng serve",
     "start": "node server/index.js",

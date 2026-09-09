@@ -229,6 +229,11 @@ jobs:
           pwd
           ls -R dist  
 
+      - name: Show project structure
+        run: |
+          pwd
+          ls -R    
+
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
