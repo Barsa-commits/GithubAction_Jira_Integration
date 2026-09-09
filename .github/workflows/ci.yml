@@ -224,6 +224,11 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Show build output
+        run: |
+          pwd
+          ls -R dist  
+
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
