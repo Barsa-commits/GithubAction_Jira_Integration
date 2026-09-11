@@ -39,7 +39,7 @@ export class AppComponent {
     this.loading = true;
     this.result = null;
     this.error = '';
-    this.http.post<{ result: string }>('http://20.115.51.41:3001/api/convert', { value: this.value }).subscribe({
+    this.http.post<{ result: string }>('/api/convert', { value: this.value }).subscribe({
       next: (response) => {
         this.result = response.result;
         this.loading = false;
