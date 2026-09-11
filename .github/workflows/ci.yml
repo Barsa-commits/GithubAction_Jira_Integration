@@ -246,6 +246,19 @@ jobs:
           -r ./dist/client/browser/* \
           ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/
 
+      - name: Copy Node.js API server to Azure VM
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+          ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "
+            mkdir -p /home/${{ secrets.VM_USER }}/app
+          "
+          scp -o StrictHostKeyChecking=no \
+          -r ./server ./package.json ./package-lock.json \
+          ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/app/
+          scp -o StrictHostKeyChecking=no \
+          ./deploy/lowercase-app.service ./deploy/nginx-lowercase-app.conf \
+          ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/
+
       - name: Deploy to NGINX
         run: |
           ssh -o StrictHostKeyChecking=no \
@@ -254,11 +267,38 @@ jobs:
             sudo cp /home/${{ secrets.VM_USER }}/main.js /var/www/html/
             sudo cp /home/${{ secrets.VM_USER }}/polyfills.js /var/www/html/
             sudo cp /home/${{ secrets.VM_USER }}/styles.css /var/www/html/
+
+            sudo cp /home/${{ secrets.VM_USER }}/nginx-lowercase-app.conf /etc/nginx/sites-available/lowercase-app.conf
+            sudo ln -sf /etc/nginx/sites-available/lowercase-app.conf /etc/nginx/sites-enabled/lowercase-app.conf
+            sudo rm -f /etc/nginx/sites-enabled/default
+            sudo nginx -t
             sudo systemctl restart nginx
-          " 
+          "
+
+      - name: Deploy and start Node.js API service
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+          ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "
+            cd /home/${{ secrets.VM_USER }}/app
+            npm ci --omit=dev
+
+            sudo sed -e 's#__APP_DIR__#/home/${{ secrets.VM_USER }}/app#g' \
+                     -e 's#__VM_USER__#${{ secrets.VM_USER }}#g' \
+                     /home/${{ secrets.VM_USER }}/lowercase-app.service \
+                     | sudo tee /etc/systemd/system/lowercase-app.service > /dev/null
+
+            sudo systemctl daemon-reload
+            sudo systemctl enable lowercase-app
+            sudo systemctl restart lowercase-app
+          "
+
       - name: Verify deployment
         run: |
-          curl -I http://${{ secrets.VM_HOST }}       
+          sleep 5
+          curl -I http://${{ secrets.VM_HOST }}
+          curl -f -X POST http://${{ secrets.VM_HOST }}/api/convert \
+            -H "Content-Type: application/json" \
+            -d '{"value":"CHECK1"}'
 
 # Workflow completion status
 # The workflow is considered successful only if all required jobs pass

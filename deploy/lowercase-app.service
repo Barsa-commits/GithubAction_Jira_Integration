@@ -1,0 +1,16 @@
+[Unit]
+Description=Lowercase converter Node.js API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=__APP_DIR__
+ExecStart=/usr/bin/env node server/index.js
+Environment=PORT=3001
+Environment=HOST=127.0.0.1
+Restart=on-failure
+RestartSec=5
+User=__VM_USER__
+
+[Install]
+WantedBy=multi-user.target
