@@ -28,7 +28,7 @@ env:
   CI: true
   JFROG_URL: ${{ secrets.JFROG_URL }}
   JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_ACCESS_TOKEN }}
-  JFROG_REPO: ${{ secrets.JFROG_REPO || 'github-action-demo' }}
+  JFROG_REPO: ${{ secrets.JFROG_REPO }}
 
 # Define the jobs that will run in this workflow
 jobs:
