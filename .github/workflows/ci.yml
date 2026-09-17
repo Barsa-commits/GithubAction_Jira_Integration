@@ -27,6 +27,9 @@ on:
 env:
   NODE_VERSION: '18'
   CI: true
+  JFROG_URL: ${{ secrets.JFROG_URL }}
+  JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_ACCESS_TOKEN }}
+  JFROG_REPO: ${{ secrets.JFROG_REPO || 'github-action-demo' }}
 
 # Define the jobs that will run in this workflow
 jobs:
@@ -86,6 +89,29 @@ jobs:
         run: npm test
         # This runs the "test" script from package.json
         # Currently configured to check if tests exist; expand as you add real tests
+
+      # Step 6.5: Package the built app for JFrog upload
+      - name: Package the app for Artifactory upload
+        run: |
+          mkdir -p artifacts
+          tar -czf "artifacts/${{ github.event.repository.name || 'alphabet-converter' }}-${{ matrix.node-version }}-${{ github.run_number }}.tgz" -C dist/client .
+          ls -lh artifacts
+
+      - name: Setup JFrog CLI
+        if: ${{ env.JFROG_URL != '' && env.JFROG_ACCESS_TOKEN != '' && env.JFROG_REPO != '' }}
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ env.JFROG_URL }}
+          JF_ACCESS_TOKEN: ${{ env.JFROG_ACCESS_TOKEN }}
+
+      - name: Publish build artifact to JFrog Artifactory
+        if: ${{ env.JFROG_URL != '' && env.JFROG_ACCESS_TOKEN != '' && env.JFROG_REPO != '' }}
+        env:
+          JF_URL: ${{ env.JFROG_URL }}
+          JF_ACCESS_TOKEN: ${{ env.JFROG_ACCESS_TOKEN }}
+        run: |
+          jf rt upload "artifacts/*.tgz" "${{ env.JFROG_REPO }}/github-actions/${{ github.ref_name }}/${{ github.run_number }}/" --flat=false
+          jf rt search "${{ env.JFROG_REPO }}/github-actions/${{ github.ref_name }}/${{ github.run_number }}/" --limit 5
 
       # Step 7: Test server API with conversion example
       # Starts the server and tests the conversion with "HELLO WORLD"
@@ -224,6 +250,33 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Setup JFrog CLI
+        if: ${{ env.JFROG_URL != '' && env.JFROG_ACCESS_TOKEN != '' && env.JFROG_REPO != '' }}
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ env.JFROG_URL }}
+          JF_ACCESS_TOKEN: ${{ env.JFROG_ACCESS_TOKEN }}
+
+      - name: Download Angular build from JFrog
+        if: ${{ env.JFROG_URL != '' && env.JFROG_ACCESS_TOKEN != '' && env.JFROG_REPO != '' }}
+        env:
+          JF_URL: ${{ env.JFROG_URL }}
+          JF_ACCESS_TOKEN: ${{ env.JFROG_ACCESS_TOKEN }}
+        run: |
+          mkdir -p release-artifacts
+          jf rt download "${{ env.JFROG_REPO }}/github-actions/${{ github.ref_name }}/${{ github.run_number }}/" "release-artifacts/" --flat=false
+          find release-artifacts -maxdepth 3 -type f | sort
+
+      - name: Prepare downloaded frontend files
+        if: ${{ env.JFROG_URL != '' && env.JFROG_ACCESS_TOKEN != '' && env.JFROG_REPO != '' }}
+        run: |
+          mkdir -p dist/client
+          ARTIFACT=$(find release-artifacts -name "*.tgz" | head -n 1)
+          if [ -n "$ARTIFACT" ]; then
+            tar -xzf "$ARTIFACT" -C dist/client
+          fi
+          ls -R dist/client
+
       - name: Show build output
         run: |
           pwd
@@ -243,7 +296,7 @@ jobs:
       - name: Copy Angular build to Azure VM
         run: |
           scp -o StrictHostKeyChecking=no \
-          -r ./dist/client/browser/* \
+          -r ./dist/client/* \
           ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/
 
       - name: Copy Node.js API server to Azure VM
