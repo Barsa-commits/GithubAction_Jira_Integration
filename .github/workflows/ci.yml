@@ -9,12 +9,11 @@ on:
   push:
     branches:
       - main
-
+      - feature_jfrog
   pull_request:
     branches:
       - main
-
-  # Allow manual runs with a custom input value
+      - feature_jfrog
   workflow_dispatch:
     inputs:
       text:
